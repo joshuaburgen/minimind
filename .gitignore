@@ -4,3 +4,6 @@ __pycache__/
 out
 website/
 docs-minimind/
+# 本地数据集（软链到 ~/github/data/datasets）与模型权重，不入库
+dataset/*.jsonl
+minimind-3/

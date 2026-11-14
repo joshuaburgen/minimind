@@ -6,6 +6,18 @@ import random
 from datasets import load_dataset, Features, Sequence, Value
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+
+def load_split(data_path, features=None):
+    """按扩展名选择 datasets builder：.parquet/.pq 走 parquet，其余按 json 处理。
+
+    parquet 自带 schema，忽略 features —— 强行传入会触发类型转换，容易报错。
+    """
+    ext = os.path.splitext(str(data_path))[1].lower()
+    fmt = 'parquet' if ext in ('.parquet', '.pq') else 'json'
+    if features is None or fmt == 'parquet':
+        return load_dataset(fmt, data_files=data_path, split='train')
+    return load_dataset(fmt, data_files=data_path, split='train', features=features)
+
 def pre_processing_chat(conversations, add_system_ratio=0.2):
     # tool use 数据完整保留不做处理
     if any(conv.get('tools') for conv in conversations): return conversations
@@ -42,7 +54,7 @@ class PretrainDataset(Dataset):
         super().__init__()
         self.tokenizer = tokenizer
         self.max_length = max_length
-        self.samples = load_dataset('json', data_files=data_path, split='train')
+        self.samples = load_split(data_path)
 
     def __len__(self):
         return len(self.samples)
@@ -64,7 +76,7 @@ class SFTDataset(Dataset):
         self.tokenizer = tokenizer
         self.max_length = max_length
         features = Features({'conversations': [{'role': Value('string'), 'content': Value('string'), 'reasoning_content': Value('string'), 'tools': Value('string'), 'tool_calls': Value('string')}]})
-        self.samples = load_dataset('json', data_files=jsonl_path, split='train', features=features)
+        self.samples = load_split(jsonl_path, features=features)
         self.bos_id = tokenizer(f'{tokenizer.bos_token}assistant\n', add_special_tokens=False).input_ids
         self.eos_id = tokenizer(f'{tokenizer.eos_token}\n', add_special_tokens=False).input_ids
 
@@ -130,7 +142,7 @@ class DPODataset(Dataset):
         self.padding = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
         self.bos_id = tokenizer(f'{tokenizer.bos_token}assistant\n', add_special_tokens=False).input_ids
         self.eos_id = tokenizer(f'{tokenizer.eos_token}\n', add_special_tokens=False).input_ids
-        self.samples = load_dataset('json', data_files=file_path, split='train')
+        self.samples = load_split(file_path)
 
     def __len__(self):
         return len(self.samples)
@@ -202,7 +214,7 @@ class RLAIFDataset(Dataset):
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.thinking_ratio = thinking_ratio  # 按概率开启 thinking
-        self.samples = load_dataset('json', data_files=jsonl_path, split='train')
+        self.samples = load_split(jsonl_path)
         self.bos_id = tokenizer(f'{tokenizer.bos_token}assistant', add_special_tokens=False).input_ids
         self.eos_id = tokenizer(f'{tokenizer.eos_token}', add_special_tokens=False).input_ids
 
